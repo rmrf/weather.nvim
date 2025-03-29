@@ -17,12 +17,12 @@ function M.setup(config)
   M.config = vim.tbl_extend("force", M.config, config or {})
 
   -- 显示天气命令
-  vim.api.nvim_create_user_command("Qian", function()
+  vim.api.nvim_create_user_command("Weather", function()
     api.display_weather(M.config.cities)
   end, { nargs = "*" })
 
   -- 清除缓存命令
-  vim.api.nvim_create_user_command("QianClearCache", function()
+  vim.api.nvim_create_user_command("WeatherClearCache", function()
     api.clear_cache()
   end, {})
 end
