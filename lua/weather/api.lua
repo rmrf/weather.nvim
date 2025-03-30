@@ -151,13 +151,19 @@ end
 local function collect_weather_data(cities)
   local all_daily_temps = {}
   local min_temp_all, max_temp_all = 100, -100
+  local current_weather_data = {}  -- 存储当前天气数据
   
-  for _, city in ipairs(cities) do
+  for i, city in ipairs(cities) do
     local weather_data = call_wttr(city)
     
     if not weather_data or not weather_data.nearest_area or #weather_data.nearest_area == 0 then
       vim.api.nvim_err_writeln("Failed to retrieve weather data for " .. city)
       goto continue
+    end
+    
+    -- 存储当前天气数据，以便后续使用
+    if weather_data.current_condition and #weather_data.current_condition > 0 then
+      current_weather_data[city] = weather_data.current_condition[1]
     end
     
     -- 获取城市名
@@ -218,13 +224,14 @@ local function collect_weather_data(cities)
   min_temp_all = math.floor(min_temp_all - 1)
   max_temp_all = math.ceil(max_temp_all + 1)
   
-  return all_daily_temps, min_temp_all, max_temp_all
+  return all_daily_temps, min_temp_all, max_temp_all, current_weather_data
 end
 
 -- 创建城市名行和当前天气行
-local function create_header_lines(all_daily_temps, cities, temp_width, padding, col_width, city_spacing)
+local function create_header_lines(all_daily_temps, cities, current_weather_data, temp_width, padding, col_width, city_spacing)
   local city_line = string.rep(" ", temp_width + #padding)
-  local current_weather_line = "Now:"  -- 直接从最左边开始，不添加前置空格
+  local emoji_line = string.rep(" ", temp_width + #padding)  -- emoji 行
+  local current_weather_line = "Now:"  -- 当前天气行
   local city_start_positions = {}
   
   -- 记录每个城市名的起始位置
@@ -234,52 +241,69 @@ local function create_header_lines(all_daily_temps, cities, temp_width, padding,
     city_line = city_line .. string.rep(" ", city_spacing)
   end
   
+  -- 重置当前天气行和emoji行，确保对齐
+  current_weather_line = "Now:"
+  emoji_line = string.rep(" ", temp_width + #padding)
+  
   -- 添加当前天气信息
   for i, city in ipairs(cities) do
-    local weather_data = call_wttr(city)
-    if weather_data and weather_data.current_condition then
-      local current_weather = weather_data.current_condition[1]
-      local current_temp = current_weather.temp_C .. "°C"
-      local current_feels = current_weather.FeelsLikeC .. "°C"
+    local current_weather = current_weather_data[city]
+    if current_weather then
+      local current_temp = current_weather.temp_C  -- 不添加 °C
+      local current_feels = current_weather.FeelsLikeC  -- 不添加 °C
+      local weather_emoji = get_weather_emoji(current_weather.weatherCode)
       
       -- 计算当前城市的天气信息应该放在哪个位置
       if i <= #city_start_positions then
         -- 计算需要添加多少空格才能对齐到城市名的位置
         local target_pos = city_start_positions[i]
+        
+        -- 对齐当前天气行
         local current_pos = #current_weather_line
         local spaces_needed = target_pos - current_pos
-        
         if spaces_needed > 0 then
           current_weather_line = current_weather_line .. string.rep(" ", spaces_needed)
         end
         
-        -- 添加当前天气信息
+        -- 对齐emoji行
+        local emoji_pos = #emoji_line
+        local emoji_spaces = target_pos - emoji_pos
+        if emoji_spaces > 0 then
+          emoji_line = emoji_line .. string.rep(" ", emoji_spaces)
+        end
+        
+        -- 添加当前天气信息（不包含emoji和单位）
         current_weather_line = current_weather_line .. string.format("%-" .. (col_width * 3) .. "s", 
-          string.format("%s (Feel %s) %s", 
+          string.format("%s (Feel %s)", 
             current_temp,
-            current_feels,
-            get_weather_emoji(current_weather.weatherCode)
+            current_feels
           )
         )
+        
+        -- 添加emoji到单独的行，居中显示
+        local emoji_padding = math.floor((col_width * 3 - #weather_emoji) / 2)
+        emoji_line = emoji_line .. string.format("%" .. emoji_padding .. "s%s%" .. 
+          (col_width * 3 - emoji_padding - #weather_emoji) .. "s", "", weather_emoji, "")
         
         -- 添加城市间距
         if i < #cities and i < #city_start_positions then
           current_weather_line = current_weather_line .. string.rep(" ", city_spacing)
+          emoji_line = emoji_line .. string.rep(" ", city_spacing)
         end
       end
     end
   end
   
-  return city_line, current_weather_line
+  return city_line, emoji_line, current_weather_line
 end
 
 -- 创建温度图表行
 local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_all, temp_width, padding, col_width, city_spacing)
   local temp_lines = {}
-  local temp_highlights = {}  -- 存储需要高亮的位置信息
+  local temp_highlights = {}  -- 保留这个变量，但不再添加高亮信息
   
   for temp = max_temp_all, min_temp_all, -1 do
-    local line = string.format("%2d°C %s", temp, padding)
+    local line = string.format("%2d°C %s", temp, padding)  -- 恢复显示 °C
     local line_idx = #temp_lines + 1
     
     -- 添加每个城市的温度标记
@@ -287,27 +311,11 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
     for _, city_data in ipairs(all_daily_temps) do
       for _, day in ipairs(city_data.temps) do
         if temp == math.floor(day.max) then
-          -- 将箭头放在列的中间位置
-          local arrow_pos = current_pos + math.floor(col_width/2)
-          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "↑", "")
-          -- 记录高温箭头位置，用于后续高亮
-          table.insert(temp_highlights, {
-            line = line_idx,
-            start_col = arrow_pos,
-            end_col = arrow_pos + 1,
-            hl_group = "WarningMsg"  -- 红色高亮
-          })
+          local square_pos = current_pos + math.floor(col_width/2)
+          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "T", "")
         elseif temp == math.floor(day.min) then
-          -- 将箭头放在列的中间位置
-          local arrow_pos = current_pos + math.floor(col_width/2)
-          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "↓", "")
-          -- 记录低温箭头位置，用于后续高亮
-          table.insert(temp_highlights, {
-            line = line_idx,
-            start_col = arrow_pos,
-            end_col = arrow_pos + 1,
-            hl_group = "String"  -- 绿色高亮
-          })
+          local square_pos = current_pos + math.floor(col_width/2)
+          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "V", "")
         else
           line = line .. string.rep(" ", col_width)
         end
@@ -328,7 +336,6 @@ local function create_date_line(all_daily_temps, temp_width, padding, col_width,
   
   for _, city_data in ipairs(all_daily_temps) do
     for _, day in ipairs(city_data.temps) do
-      -- 只显示日期，不显示天气图标
       date_line = date_line .. string.format("%-" .. col_width .. "s", string.sub(day.date, 6))
     end
     date_line = date_line .. string.rep(" ", city_spacing)
@@ -384,7 +391,7 @@ end
 -- 应用当前日期高亮
 local function apply_date_highlight(buf, all_daily_temps, temp_width, padding, col_width, city_spacing)
   local current_date = os.date("%Y-%m-%d")
-  local ns_id = vim.api.nvim_create_namespace('weather_highlight')
+  local ns_id = vim.api.nvim_create_namespace('weather_date_highlight')  -- 使用不同的命名空间
   local highlight_pos = vim.api.nvim_buf_line_count(buf) - 1  -- 日期行的位置（最后一行）
   
   -- 为每个城市的当前日期添加高亮
@@ -401,22 +408,6 @@ local function apply_date_highlight(buf, all_daily_temps, temp_width, padding, c
   end
 end
 
--- 应用温度箭头高亮
-local function apply_temp_highlights(buf, temp_highlights)
-  local ns_id = vim.api.nvim_create_namespace('weather_temp_highlight')
-  
-  for _, hl in ipairs(temp_highlights) do
-    vim.api.nvim_buf_add_highlight(
-      buf,
-      ns_id,
-      hl.hl_group,
-      hl.line - 1,  -- 行号从0开始
-      hl.start_col,
-      hl.end_col
-    )
-  end
-end
-
 -- 主函数：显示天气信息
 result.display_weather = function(cities)
   if type(cities) ~= "table" then
@@ -424,9 +415,9 @@ result.display_weather = function(cities)
   end
   
   -- 只取前两个城市
-  if #cities > 2 then
-    cities = {cities[1], cities[2]}
-    vim.notify("Only showing weather for the first two cities", vim.log.levels.INFO)
+  if #cities > 3 then
+    cities = {cities[1], cities[2], cities[3]}
+    vim.notify("Only showing weather for the first 3 cities", vim.log.levels.INFO)
   end
   
   -- 创建加载窗口
@@ -441,7 +432,7 @@ result.display_weather = function(cities)
     local padding = string.rep(" ", 2)  -- 温度刻度和图表之间的间距
     
     -- 收集城市天气数据
-    local all_daily_temps, min_temp_all, max_temp_all = collect_weather_data(cities)
+    local all_daily_temps, min_temp_all, max_temp_all, current_weather_data = collect_weather_data(cities)
     
     -- 关闭加载窗口
     vim.api.nvim_win_close(loading_win, true)
@@ -453,7 +444,7 @@ result.display_weather = function(cities)
     end
     
     -- 创建城市名行和当前天气行
-    local city_line, current_weather_line = create_header_lines(all_daily_temps, cities, temp_width, padding, col_width, city_spacing)
+    local city_line, emoji_line, current_weather_line = create_header_lines(all_daily_temps, cities, current_weather_data, temp_width, padding, col_width, city_spacing)
     
     -- 创建温度图表行
     local temp_lines, temp_highlights = create_temperature_lines(all_daily_temps, min_temp_all, max_temp_all, temp_width, padding, col_width, city_spacing)
@@ -464,6 +455,7 @@ result.display_weather = function(cities)
     -- 构建所有行
     local lines = {
       city_line,
+      emoji_line,
       current_weather_line,
       ""  -- 空行
     }
@@ -479,11 +471,8 @@ result.display_weather = function(cities)
     -- 创建浮动窗口并显示天气信息
     local buf, win = create_weather_window(lines)
     
-    -- 应用当前日期高亮
+    -- 应用当前日期高亮 - 后应用日期高亮
     apply_date_highlight(buf, all_daily_temps, temp_width, padding, col_width, city_spacing)
-    
-    -- 应用温度箭头高亮
-    apply_temp_highlights(buf, temp_highlights)
   end)
 end
 
