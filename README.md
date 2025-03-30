@@ -1,8 +1,8 @@
 # Weather Neovim plugin 
 
 ## features
-- Display max 3 cities' weather for compare
-- Show min/max easily have a glance
+- Display weather for up to 3 cities for comparison
+- Show min/max temperatures at a glance
 
 ## Installing
 
@@ -51,4 +51,8 @@ require("weather").setup({
 ```
 :Weather
 ```
+
+## Screenshot
+
+![image](https://github.com/user-attachments/assets/96e58803-1aac-4afc-b85e-196ba5de59b8)
 
