@@ -3,8 +3,8 @@ local M = {}
 local api = require("weather.api")
 
 M.config = {
-  cities = { "Shanghai", "Beijing" }, -- 默认显示两个城市
-  cache_duration = 300, -- 缓存时间（秒），可配置
+  cities = { "Shanghai" }, 
+  cache_duration = 300,
 }
 
 -- main function
@@ -16,12 +16,10 @@ function M.setup(config)
 
   M.config = vim.tbl_extend("force", M.config, config or {})
 
-  -- 显示天气命令
   vim.api.nvim_create_user_command("Weather", function()
     api.display_weather(M.config.cities)
   end, { nargs = "*" })
 
-  -- 清除缓存命令
   vim.api.nvim_create_user_command("WeatherClearCache", function()
     api.clear_cache()
   end, {})

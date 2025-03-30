@@ -297,31 +297,31 @@ local function create_header_lines(all_daily_temps, cities, current_weather_data
   return city_line, emoji_line, current_weather_line
 end
 
--- 创建温度图表行
+-- Create temperature chart lines
 local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_all, temp_width, padding, col_width, city_spacing)
   local temp_lines = {}
-  local temp_highlights = {}  -- 保留这个变量，但不再添加高亮信息
+  local temp_highlights = {}  -- Keep this variable, but no longer add highlight info
   
   for temp = max_temp_all, min_temp_all, -1 do
-    local line = string.format("%2d°C %s", temp, padding)  -- 恢复显示 °C
+    local line = string.format("%2d°C %s", temp, padding)  -- Show °C in temperature scale
     local line_idx = #temp_lines + 1
     
-    -- 添加每个城市的温度标记
+    -- Add temperature markers for each city
     local current_pos = #line
     for _, city_data in ipairs(all_daily_temps) do
       for _, day in ipairs(city_data.temps) do
         if temp == math.floor(day.max) then
           local square_pos = current_pos + math.floor(col_width/2)
-          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "T", "")
+          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "^", "")
         elseif temp == math.floor(day.min) then
           local square_pos = current_pos + math.floor(col_width/2)
-          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "V", "")
+          line = line .. string.format("%" .. math.floor(col_width/2) .. "s%-" .. math.floor(col_width/2) .. "s", "v", "")
         else
           line = line .. string.rep(" ", col_width)
         end
         current_pos = current_pos + col_width
       end
-      line = line .. string.rep(" ", city_spacing)  -- 添加城市间距
+      line = line .. string.rep(" ", city_spacing)  -- Add spacing between cities
       current_pos = current_pos + city_spacing
     end
     table.insert(temp_lines, line)
