@@ -54,6 +54,7 @@ require("weather").setup({
 
 ## Screenshot
 
-![image](https://github.com/user-attachments/assets/f855cb31-61c3-449a-8582-68ee45194da0)
+![image](https://github.com/user-attachments/assets/c777a866-9822-4ba1-86a2-770eab13c7b4)
+
 
 
