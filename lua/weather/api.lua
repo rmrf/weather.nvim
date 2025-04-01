@@ -441,6 +441,7 @@ local function create_header_lines(all_daily_temps, cities, current_weather_data
   return city_line, emoji_line, current_weather_line
 end
 
+
 -- Create temperature chart lines
 local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_all, temp_width, padding, col_width, city_spacing)
     local temp_lines = {}
@@ -450,13 +451,12 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
         return temp_lines
     end
 
-
     for temp = max_temp_all, min_temp_all, -1 do
         -- Ensure temp_width accommodates the label format, e.g., "-10°C " needs at least 6
         local temp_label = string.format("%d°C", temp)
         local line = string.format("%" .. (temp_width - 1) .. "s %s", temp_label, padding) -- Right-align temp label
 
-        local current_line_pos = #line -- Track position for adding markers
+        -- local current_line_pos = #line -- This variable doesn't seem to be used effectively, removing for clarity
 
         for city_idx, city_data in ipairs(all_daily_temps) do
             if city_data.temps and #city_data.temps > 0 then -- Check if temps exist for the city
@@ -466,11 +466,20 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
 
                     -- Ensure day.max and day.min are numbers before comparing
                     if day.max and day.min and type(day.max) == 'number' and type(day.min) == 'number' then
-                        if temp == math.floor(day.max) then
+                        -- Use math.floor to get integer part for comparison
+                        local floored_max = math.floor(day.max)
+                        local floored_min = math.floor(day.min)
+
+                        if temp == floored_max then
                             marker = "H"
-                        elseif temp == math.floor(day.min) then
+                        elseif temp == floored_min then
                             marker = "L"
+                        -- Add condition for the vertical line between H and L
+                        elseif temp < floored_max and temp > floored_min then
+                            marker = "|" -- Use vertical bar for temperatures between high and low
                         end
+                        -- If max and min are the same, only H or L will be marked based on the order above.
+                        -- If temp is outside the range [floored_min, floored_max], marker remains " ".
                     end
 
                     -- Construct the column string with the marker centered
@@ -478,18 +487,20 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
                     local right_padding = string.rep(" ", col_width - marker_pos_in_col - #marker)
                     line = line .. left_padding .. marker .. right_padding
 
-                    current_line_pos = current_line_pos + col_width -- Update position after adding day column
+                    -- current_line_pos = current_line_pos + col_width -- Update position after adding day column (Not strictly needed for line construction)
                 end
             else
                  -- If a city has no temp data (e.g., API error for that city), add empty space for its columns
-                 line = line .. string.rep(" ", col_width * 3) -- Assuming max 3 days, adjust if needed
-                 current_line_pos = current_line_pos + col_width * 3
+                 -- Determine the number of days dynamically if possible, otherwise keep the assumption (e.g., 3)
+                 local num_days = 3 -- Default assumption or get from data if available (e.g., #all_daily_temps[1].temps if guaranteed)
+                 if city_data.temps and #city_data.temps > 0 then num_days = #city_data.temps end -- Or use a more robust way
+                 line = line .. string.rep(" ", col_width * num_days)
+                 -- current_line_pos = current_line_pos + col_width * num_days
             end
-
 
             if city_idx < #all_daily_temps then -- Add spacing only between cities
                 line = line .. string.rep(" ", city_spacing)
-                current_line_pos = current_line_pos + city_spacing -- Update position after adding spacing
+                -- current_line_pos = current_line_pos + city_spacing -- Update position after adding spacing (Not strictly needed)
             end
         end
         table.insert(temp_lines, line)
@@ -497,6 +508,7 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
 
     return temp_lines
 end
+
 
 -- Create date line
 local function create_date_line(all_daily_temps, temp_width, padding, col_width, city_spacing)
