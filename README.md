@@ -1,6 +1,7 @@
-# Weather Neovim plugin 
+# Weather Neovim plugin
 
 ## features
+
 - Display weather for up to 3 cities for comparison
 - Show min/max temperatures at a glance
 
@@ -16,7 +17,7 @@ Using `packer.nvim`
 
 ```
 use({
-  "rmrf/weather.nvim", 
+  "rmrf/weather.nvim",
   requires = {
     'nvim-lua/plenary.nvim',
   }
@@ -27,12 +28,16 @@ use({
 Using `lazy.nvim`
 
 ```
-use({
-  "rmrf/weather.nvim",
-  dependencies = {
-    'nvim-lua/plenary.nvim',
-  }
-})
+	{
+		"rmrf/weather.nvim",
+		dependencies = {
+			"nvim-lua/plenary.nvim",
+		},
+        -- only pick the first 3 cities
+		opts = { cities = { "Shanghai", "Chengdu", "Jilin", "SanJose" } },
+		cmd = "Weather", -- Optional Lazy Loading
+	},
+
 ```
 
 ## Configuration
@@ -55,6 +60,3 @@ require("weather").setup({
 ## Screenshot
 
 ![image](https://github.com/user-attachments/assets/c777a866-9822-4ba1-86a2-770eab13c7b4)
-
-
-

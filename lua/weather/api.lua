@@ -423,16 +423,6 @@ local function create_header_lines(all_daily_temps, cities, current_weather_data
                                         string.rep(" ", padding_needed) ..
                                         string.sub(current_weather_line, now_label_len + 1)
 
-            --[[ Alternative: Simpler padding after "Now:"
-            elseif first_city_start > now_label_len then
-                 padding_needed = first_city_start - now_label_len
-                 -- Ensure we don't remove existing spaces if the centering already added them
-                 local current_padding = string.match(current_weather_line, "^Now:%s*")
-                 local existing_spaces = current_padding and (#current_padding - now_label_len) or 0
-                 if padding_needed > existing_spaces then
-                      current_weather_line = "Now:" .. string.rep(" ", padding_needed) .. string.sub(current_weather_line, now_label_len + existing_spaces + 1)
-                 end
-            --]]
             end
 
        end
