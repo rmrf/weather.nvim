@@ -28,15 +28,15 @@ use({
 Using `lazy.nvim`
 
 ```
-	{
-		"rmrf/weather.nvim",
-		dependencies = {
-			"nvim-lua/plenary.nvim",
-		},
-        -- only pick the first 3 cities
-		opts = { cities = { "Shanghai", "Chengdu", "Jilin", "SanJose" } },
-		cmd = "Weather", -- Optional Lazy Loading
-	},
+{
+    "rmrf/weather.nvim",
+    dependencies = {
+        "nvim-lua/plenary.nvim",
+    },
+    -- only pick the first 3 cities
+    opts = { cities = { "Shanghai", "Chengdu", "Jilin", "SanJose" } },
+    cmd = "Weather", -- Optional Lazy Loading
+},
 
 ```
 
