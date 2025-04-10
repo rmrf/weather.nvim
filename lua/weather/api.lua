@@ -428,6 +428,14 @@ local function create_header_lines(all_daily_temps, cities, current_weather_data
        end
   end
 
+  if #all_daily_temps > 1 then
+    local right_scale_width = #padding + (temp_width - 1)
+    local right_padding = string.rep(" ", right_scale_width)
+    city_line = city_line .. right_padding
+    emoji_line = emoji_line .. right_padding
+    current_weather_line = current_weather_line .. right_padding
+  end
+
   return city_line, emoji_line, current_weather_line
 end
 
@@ -444,12 +452,10 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
     for temp = max_temp_all, min_temp_all, -1 do
         -- Ensure temp_width accommodates the label format, e.g., "-10°C " needs at least 6
         local temp_label = string.format("%d°C", temp)
-        local line = string.format("%" .. (temp_width - 1) .. "s %s", temp_label, padding) -- Right-align temp label
-
-        -- local current_line_pos = #line -- This variable doesn't seem to be used effectively, removing for clarity
+        local line = string.format("%" .. (temp_width - 1) .. "s %s", temp_label, padding) -- Right-align temp label LEFT
 
         for city_idx, city_data in ipairs(all_daily_temps) do
-            if city_data.temps and #city_data.temps > 0 then -- Check if temps exist for the city
+            if city_data.temps and #city_data.temps > 0 then
                 for day_idx, day in ipairs(city_data.temps) do
                     local marker = " " -- Default: empty space
                     local marker_pos_in_col = math.floor(col_width / 2) -- Position within the day's column
@@ -476,8 +482,6 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
                     local left_padding = string.rep(" ", marker_pos_in_col)
                     local right_padding = string.rep(" ", col_width - marker_pos_in_col - #marker)
                     line = line .. left_padding .. marker .. right_padding
-
-                    -- current_line_pos = current_line_pos + col_width -- Update position after adding day column (Not strictly needed for line construction)
                 end
             else
                  -- If a city has no temp data (e.g., API error for that city), add empty space for its columns
@@ -485,14 +489,17 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
                  local num_days = 3 -- Default assumption or get from data if available (e.g., #all_daily_temps[1].temps if guaranteed)
                  if city_data.temps and #city_data.temps > 0 then num_days = #city_data.temps end -- Or use a more robust way
                  line = line .. string.rep(" ", col_width * num_days)
-                 -- current_line_pos = current_line_pos + col_width * num_days
             end
 
             if city_idx < #all_daily_temps then -- Add spacing only between cities
                 line = line .. string.rep(" ", city_spacing)
-                -- current_line_pos = current_line_pos + city_spacing -- Update position after adding spacing (Not strictly needed)
             end
         end
+
+        if #all_daily_temps > 1 then
+          line = line .. padding .. string.format("%" .. (temp_width -1) .. "s", temp_label) -- Changed from "%-" to "%" for right-alignment
+        end
+
         table.insert(temp_lines, line)
     end
 
@@ -536,6 +543,13 @@ local function create_date_line(all_daily_temps, temp_width, padding, col_width,
           current_pos = current_pos + city_spacing
       end
   end
+
+  if #all_daily_temps > 1 then
+    local right_scale_width = #padding + (temp_width - 1)
+    local right_padding = string.rep(" ", right_scale_width)
+    date_line = date_line .. right_padding
+  end
+
   return date_line
 end
 
@@ -555,12 +569,12 @@ local function create_weather_window(lines)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
   -- Calculate window size
-  local width = 0
+  local max_line_width = 0
   for _, line in ipairs(lines) do
     -- Calculate width based on actual character count, not byte length
-    width = math.max(width, vim.fn.strdisplaywidth(line))
+    max_line_width = math.max(max_line_width, vim.fn.strdisplaywidth(line))
   end
-  width = width + 4  -- Add margin for border and padding
+  local width = max_line_width + 2
 
   local height = #lines
   -- Ensure height and width are within reasonable bounds relative to screen size
@@ -579,7 +593,7 @@ local function create_weather_window(lines)
     relative = 'editor', -- Use 'editor' for centering relative to the whole editor
     row = row,
     col = col,
-    width = width,
+    width = width, -- Use the adjusted width
     height = height,
     style = 'minimal',
     border = 'rounded',
@@ -779,3 +793,4 @@ result.display_weather = function(cities)
 end
 
 return result
+
