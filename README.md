@@ -59,5 +59,6 @@ require("weather").setup({
 
 ## Screenshot
 
-![weather-vim](https://github.com/user-attachments/assets/e3e2c472-d999-4988-acf4-eaba730d5dee)
+![image](https://github.com/user-attachments/assets/a28a0244-5540-4c45-aa79-1a6a18176d69)
+
 
