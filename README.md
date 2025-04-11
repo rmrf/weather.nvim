@@ -4,6 +4,7 @@
 
 - Display weather for up to 3 cities for comparison
 - Show min/max temperatures at a glance
+- emoji show worst weather on top of each day line
 
 ## Installing
 
