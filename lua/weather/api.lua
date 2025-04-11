@@ -161,6 +161,33 @@ local function get_weather_emoji_map()
   }
 end
 
+-- *** NEW: Function to rank weather severity (higher is worse) ***
+local function get_weather_severity(weather_code)
+  local code = tonumber(weather_code) or 0 -- Ensure it's a number
+  -- Prioritize Thunderstorms
+  if code == 200 or code == 386 or code == 389 or code == 392 then return 10 end
+  -- Heavy Snow/Ice Pellets
+  if code == 230 or code == 338 or code == 371 or code == 395 or code == 377 or code == 350 then return 9 end
+  -- Heavy Rain
+  if code == 308 or code == 359 then return 8 end
+  -- Snow/Freezing Fog
+  if code == 227 or code == 326 or code == 368 or code == 260 then return 7 end
+   -- Moderate or Patchy Rain/Sleet/Snow
+  if code == 176 or code == 266 or code == 296 or code == 302 or code == 353 or code == 182 or code == 185 or code == 281 or code == 284 or code == 311 or code == 317 or code == 320 or code == 362 or code == 365 then return 6 end
+  -- Light Rain/Drizzle/Snow
+  if code == 179 or code == 263 or code == 293 or code == 299 or code == 305 or code == 314 or code == 323 or code == 329 or code == 332 or code == 335 or code == 374 or code == 389 then return 5 end
+  -- Fog/Mist
+  if code == 143 or code == 248 then return 4 end
+  -- Cloudy/Overcast
+  if code == 119 or code == 122 then return 3 end
+  -- Partly Cloudy
+  if code == 116 then return 2 end
+  -- Clear/Sunny
+  if code == 113 then return 1 end
+  -- Default/Unknown
+  return 0
+end
+
 local function get_weather_emoji(weather_code)
   local emoji_map = get_weather_emoji_map()
   return emoji_map[weather_code] or "✨"  -- Use ✨ as default icon for unknown weather
@@ -238,20 +265,37 @@ local function collect_weather_data(cities)
        end
 
 
-      -- Find weather conditions for max and min temperatures (with checks)
-      local max_temp_weather_code = "113"  -- Default sunny
-      local min_temp_weather_code = "113"
+      -- *** Find the "worst" weather code for the day ***
+      local worst_weather_code_for_day = "113" -- Default to Sunny
+      local max_severity_for_day = 0
       if day.hourly and type(day.hourly) == 'table' then
         for _, hour in ipairs(day.hourly) do
-           -- Check if hourly data is valid
+           if type(hour) == 'table' and hour.weatherCode then
+              local current_severity = get_weather_severity(hour.weatherCode)
+              if current_severity > max_severity_for_day then
+                 max_severity_for_day = current_severity
+                 worst_weather_code_for_day = hour.weatherCode
+              end
+           end
+        end
+      end
+      -- *** End of finding worst weather code ***
+
+      -- Find weather conditions for max temperature time (still needed?)
+      -- We might not strictly need max_temp_weather_code anymore if we always show the worst.
+      -- Keep it for now in case it's used elsewhere or for future features.
+      local max_temp_weather_code = "113"
+      if day.hourly and type(day.hourly) == 'table' then
+        for _, hour in ipairs(day.hourly) do
            if type(hour) == 'table' and hour.tempC and hour.weatherCode then
               local temp = tonumber(hour.tempC)
-              if temp and max_temp and temp == max_temp then -- Ensure max_temp is a number
+              if temp and max_temp and temp == max_temp then
                 max_temp_weather_code = hour.weatherCode
+                -- We can break here if we only care about the first hour matching max temp
+                -- break
               end
-              if temp and min_temp and temp == min_temp then -- Ensure min_temp is a number
-                min_temp_weather_code = hour.weatherCode
-              end
+              -- Keep min_temp_weather_code logic if needed
+              -- ...
            end
         end
       end
@@ -270,8 +314,9 @@ local function collect_weather_data(cities)
         avg = avg_temp,
         sunrise = astronomy.sunrise,
         sunset = astronomy.sunset,
-        max_weather_code = max_temp_weather_code,
-        min_weather_code = min_temp_weather_code
+        max_weather_code = max_temp_weather_code, -- Keep for potential future use
+        min_weather_code = min_temp_weather_code, -- Keep for potential future use
+        worst_weather_code = worst_weather_code_for_day -- *** Store the worst code ***
       })
 
       min_temp_all = math.min(min_temp_all, min_temp)
@@ -450,54 +495,64 @@ local function create_temperature_lines(all_daily_temps, min_temp_all, max_temp_
     end
 
     for temp = max_temp_all, min_temp_all, -1 do
-        -- Ensure temp_width accommodates the label format, e.g., "-10°C " needs at least 6
         local temp_label = string.format("%d°C", temp)
-        local line = string.format("%" .. (temp_width - 1) .. "s %s", temp_label, padding) -- Right-align temp label LEFT
+        -- Format the left temperature scale, right-aligned within its width
+        local line = string.format("%" .. (temp_width - 1) .. "s %s", temp_label, padding)
 
         for city_idx, city_data in ipairs(all_daily_temps) do
             if city_data.temps and #city_data.temps > 0 then
                 for day_idx, day in ipairs(city_data.temps) do
-                    local marker = " " -- Default: empty space
-                    local marker_pos_in_col = math.floor(col_width / 2) -- Position within the day's column
+                    local marker = " "
+                    local display_char = marker
 
-                    -- Ensure day.max and day.min are numbers before comparing
                     if day.max and day.min and type(day.max) == 'number' and type(day.min) == 'number' then
-                        -- Use math.floor to get integer part for comparison
                         local floored_max = math.floor(day.max)
                         local floored_min = math.floor(day.min)
 
+                        -- Determine the marker ('H', 'L', '|')
                         if temp == floored_max then
                             marker = "H"
                         elseif temp == floored_min then
                             marker = "L"
-                        -- Add condition for the vertical line between H and L
                         elseif temp < floored_max and temp > floored_min then
-                            marker = "|" -- Use vertical bar for temperatures between high and low
+                            marker = "|"
                         end
-                        -- If max and min are the same, only H or L will be marked based on the order above.
-                        -- If temp is outside the range [floored_min, floored_max], marker remains " ".
+
+                        -- *** Place emoji based on WORST weather code ***
+                        -- Check if this line is directly above the max temp line
+                        -- AND use the stored 'worst_weather_code'
+                        if temp == floored_max + 1 and day.worst_weather_code then -- Changed from day.max_weather_code
+                           local emoji = get_weather_emoji(day.worst_weather_code) -- Use worst code here
+                           display_char = emoji
+                           marker = string.rep(" ", vim.fn.strdisplaywidth(emoji))
+                        else
+                            display_char = marker
+                        end
                     end
 
-                    -- Construct the column string with the marker centered
-                    local left_padding = string.rep(" ", marker_pos_in_col)
-                    local right_padding = string.rep(" ", col_width - marker_pos_in_col - #marker)
-                    line = line .. left_padding .. marker .. right_padding
+                    -- Calculate padding and append display_char
+                    local char_width = vim.fn.strdisplaywidth(display_char)
+                    local total_padding = math.max(0, col_width - char_width)
+                    local left_padding_count = math.floor(total_padding / 2)
+                    local right_padding_count = col_width - char_width - left_padding_count
+                    line = line .. string.rep(" ", left_padding_count) .. display_char .. string.rep(" ", right_padding_count)
+
                 end
             else
-                 -- If a city has no temp data (e.g., API error for that city), add empty space for its columns
-                 -- Determine the number of days dynamically if possible, otherwise keep the assumption (e.g., 3)
-                 local num_days = 3 -- Default assumption or get from data if available (e.g., #all_daily_temps[1].temps if guaranteed)
-                 if city_data.temps and #city_data.temps > 0 then num_days = #city_data.temps end -- Or use a more robust way
+                 -- Handle city with no data
+                 local num_days = 3 -- Default assumption or get from data if available
+                 if city_data.temps and #city_data.temps > 0 then num_days = #city_data.temps end
                  line = line .. string.rep(" ", col_width * num_days)
             end
 
-            if city_idx < #all_daily_temps then -- Add spacing only between cities
+            if city_idx < #all_daily_temps then
                 line = line .. string.rep(" ", city_spacing)
             end
         end
 
+        -- Add right temperature scale if more than one city is displayed
         if #all_daily_temps > 1 then
-          line = line .. padding .. string.format("%" .. (temp_width -1) .. "s", temp_label) -- Changed from "%-" to "%" for right-alignment
+          line = line .. padding .. string.format("%" .. (temp_width -1) .. "s", temp_label)
         end
 
         table.insert(temp_lines, line)
