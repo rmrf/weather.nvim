@@ -760,6 +760,74 @@ local function apply_high_temp_highlight(buf, all_daily_temps, max_temp_all, tem
   end
 end
 
+-- *** NEW FUNCTION: Apply current temperature highlight for today ***
+local function apply_current_temp_highlight(buf, cities, all_daily_temps, current_weather_data, max_temp_all, temp_width, padding, col_width, city_spacing)
+  if not buf or not vim.api.nvim_buf_is_valid(buf) then return end -- Check buffer
+  if not max_temp_all or not current_weather_data then return end -- Check data
+
+  local current_date_str = os.date("%Y-%m-%d")
+  local ns_id = vim.api.nvim_create_namespace('weather_current_temp_highlight')
+  local header_lines = 4 -- city, emoji, now, separator
+
+  local current_col_offset = temp_width + #padding -- Start after left temp scale and padding
+
+  for city_idx, city_data in ipairs(all_daily_temps) do
+    local original_city_name = cities[city_idx] -- Get original name used as key in current_weather_data
+    local found_today = false
+    local today_col_idx = -1 -- Track the index of today within the city's columns
+
+    -- First pass: Find today's column index for this city
+    if city_data.temps and #city_data.temps > 0 then
+      for day_idx, day in ipairs(city_data.temps) do
+        if day.date and day.date == current_date_str then
+          found_today = true
+          today_col_idx = day_idx - 1 -- 0-indexed column within the city
+          break
+        end
+      end
+    end
+
+    -- Apply highlight if today was found and we have current data
+    if found_today and original_city_name and current_weather_data[original_city_name] then
+      local current_temp_data = current_weather_data[original_city_name]
+      local current_temp_C = tonumber(current_temp_data.temp_C)
+
+      if current_temp_C then
+        local floored_current_temp = math.floor(current_temp_C)
+
+        -- Check if current temp is within the displayed range
+        local day_info = city_data.temps[today_col_idx + 1]
+        if day_info.max and day_info.min and floored_current_temp < math.floor(day_info.max) and floored_current_temp > math.floor(day_info.min) then
+            -- Calculate line number (0-indexed) for the temperature bar
+            local chart_line_idx = max_temp_all - floored_current_temp
+            local highlight_line_idx = header_lines + chart_line_idx -- Add offset for header lines
+
+            -- Calculate column number (0-indexed) for the marker
+            local marker_pos_in_col = math.floor(col_width / 2) -- Center position within the day's column
+            -- Calculate the starting column for today's specific column
+            local today_col_start_offset = current_col_offset + (today_col_idx * col_width)
+            local highlight_start_col = today_col_start_offset + marker_pos_in_col -- Column where '|' should be
+
+            -- Apply highlight (e.g., ErrorMsg for red) safely
+            pcall(vim.api.nvim_buf_add_highlight, buf, ns_id, 'ErrorMsg',
+                  highlight_line_idx, highlight_start_col, highlight_start_col + 1) -- Highlight the '|' character
+         end
+      end
+    end
+
+    -- Update column offset for the next city
+    local num_days_for_city = 3 -- Default or calculate
+    if city_data.temps and #city_data.temps > 0 then
+        num_days_for_city = #city_data.temps
+    end
+    current_col_offset = current_col_offset + col_width * num_days_for_city
+
+    if city_idx < #all_daily_temps then -- Add spacing only between cities
+        current_col_offset = current_col_offset + city_spacing
+    end
+  end
+end
+
 
 -- Main function: display weather info
 result.display_weather = function(cities)
@@ -841,8 +909,11 @@ result.display_weather = function(cities)
       -- Apply current date highlight
       apply_date_highlight(buf, all_daily_temps, temp_width, padding, col_width, city_spacing)
 
-      -- *** Apply high temperature highlight ***
+      -- Apply high temperature highlight
       apply_high_temp_highlight(buf, all_daily_temps, max_temp_all, temp_width, padding, col_width, city_spacing)
+
+      -- *** NEW: Apply current temperature highlight ***
+      apply_current_temp_highlight(buf, cities, all_daily_temps, current_weather_data, max_temp_all, temp_width, padding, col_width, city_spacing)
     end
   end)
 end
