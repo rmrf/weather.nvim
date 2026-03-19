@@ -20,6 +20,7 @@ local function call_wttr(city)
   end
 
   local url = string.format("https://wttr.in/%s?format=j1", city)
+
   -- Add a User-Agent to potentially avoid blocks
   local response = curl.get({
     url = url,
@@ -28,17 +29,18 @@ local function call_wttr(city)
     }
   })
 
-
   if response and response.body then
     -- Add error handling for non-JSON responses
     local success, weather_data = pcall(vim.json.decode, response.body)
     if success and weather_data then
+      -- Unwrap the top-level "data" key if present
+      local actual_data = weather_data.data or weather_data
       -- Update cache
       cache[city] = {
-        data = weather_data,
+        data = actual_data,
         timestamp = os.time()
       }
-      return weather_data
+      return actual_data
     else
       vim.notify("Failed to decode weather data for " .. city .. ". Response: " .. (response.body or "empty"), vim.log.levels.WARN)
     end
@@ -205,7 +207,6 @@ local function collect_weather_data(cities)
 
     -- More robust check for valid data structure
     if not weather_data or type(weather_data) ~= 'table' or
-       not weather_data.nearest_area or type(weather_data.nearest_area) ~= 'table' or #weather_data.nearest_area == 0 or
        not weather_data.weather or type(weather_data.weather) ~= 'table' then
       vim.notify("Incomplete or invalid weather data structure for " .. city, vim.log.levels.WARN)
       goto continue -- Use goto to skip to the next iteration
@@ -225,11 +226,12 @@ local function collect_weather_data(cities)
     end
 
 
-    -- Get city name (with more checks)
-    local city_name = "Unknown City"
-    local region = "Unknown Region"
-    local nearest_area = weather_data.nearest_area[1]
-    if type(nearest_area) == 'table' then
+    -- Get city name — nearest_area no longer returned by API, fall back to query name
+    local city_name = city
+    local region = ""
+    if weather_data.nearest_area and type(weather_data.nearest_area) == 'table' and #weather_data.nearest_area > 0 then
+      local nearest_area = weather_data.nearest_area[1]
+      if type(nearest_area) == 'table' then
         if nearest_area.areaName and type(nearest_area.areaName) == 'table' and #nearest_area.areaName > 0 and
            type(nearest_area.areaName[1]) == 'table' and nearest_area.areaName[1].value then
             city_name = nearest_area.areaName[1].value
@@ -238,6 +240,7 @@ local function collect_weather_data(cities)
            type(nearest_area.region[1]) == 'table' and nearest_area.region[1].value then
             region = nearest_area.region[1].value
         end
+      end
     end
 
 
@@ -330,7 +333,7 @@ local function collect_weather_data(cities)
         -- Sort by date
         table.sort(daily_temps, function(a, b) return a.date < b.date end)
         table.insert(all_daily_temps, {
-          city = string.format("%s, %s", city_name, region),
+          city = region ~= "" and string.format("%s, %s", city_name, region) or city_name,
           temps = daily_temps
         })
     end
